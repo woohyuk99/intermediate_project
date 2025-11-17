@@ -1,6 +1,6 @@
 # 📚 덕후감 - 독서의 즐거움을 공유하는 커뮤니티
 
-![logo](./docs/logo.png)
+![logo](./images/logo.png)
 
 ### 관련 자료
 
