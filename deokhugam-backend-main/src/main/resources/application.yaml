@@ -1,0 +1,31 @@
+server:
+  port: 8080
+  servlet:
+    encoding:
+      charset: UTF-8
+      enabled: true
+      force: true
+
+spring:
+  application:
+    name: deokhugam
+  profiles:
+    active: prod   # ?? ?? dev, ?? ? prod? ??
+  jpa:
+    open-in-view: false
+  sql:
+    init:
+      encoding: UTF-8
+
+logging:
+  level:
+    root: INFO
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: never

@@ -1,0 +1,56 @@
+spring:
+  config:
+    activate:
+      on-profile: dev
+
+  datasource:
+    url: ${DB_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+
+  sql:
+    init:
+      mode: never   # ✅ schema.sql / data.sql 실행 방지
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+        dialect: org.hibernate.dialect.PostgreSQLDialect  # ✅ 명시적으로 dialect 지정 (안정성 ↑)
+
+cloud:
+  aws:
+    s3:
+      bucket: ${AWS_S3_BUCKET}       # ✅ 환경변수에서 버킷 이름 주입
+    region:
+      static: ${AWS_REGION:ap-northeast-2}   # 기본값은 서울 리전
+    credentials:
+      access-key: ${AWS_ACCESS_KEY_ID}
+      secret-key: ${AWS_SECRET_ACCESS_KEY}
+
+app:
+  file:
+    upload-dir: ${APP_UPLOAD_DIR:${user.home}/deokhugam/uploads}   # 로컬 저장 경로 (백업용)
+  web:
+    public-base-path: /sb/deokhugam
+  external:
+    naver:
+      base-url: https://openapi.naver.com/v1/search
+      client-id: ${NAVER_CLIENT_ID}
+      client-secret: ${NAVER_CLIENT_SECRET}
+      download-thumbnail: true
+    ocr:
+      base-url: https://api.ocr.space
+      api-key: ${OCR_SPACE_API_KEY}
+      ocr-engine: 2
+      language: kor
+
+logging:
+  level:
+    org.springframework.web: INFO
+    org.hibernate.SQL: DEBUG
+    org.hibernate.type.descriptor.sql.BasicBinder: TRACE

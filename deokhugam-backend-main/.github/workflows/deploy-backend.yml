@@ -1,0 +1,102 @@
+name: 🚀 Deploy Backend to AWS ECS
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:   # 👈 수동 실행도 가능
+
+permissions:
+  contents: read
+  id-token: write      # 👈 GitHub → AWS 인증용
+
+jobs:
+  deploy-backend:
+    name: Deploy Backend Service
+    runs-on: ubuntu-latest
+
+    env:
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+      ECR_REPOSITORY: ${{ secrets.ECR_BACKEND }}
+      ECS_CLUSTER: ${{ secrets.ECS_CLUSTER }}
+      ECS_SERVICE: ${{ secrets.ECS_SERVICE_BACKEND }}
+
+    steps:
+      - name: ✅ Checkout source
+        uses: actions/checkout@v4
+
+      - name: ☕ Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: 🧱 Build Spring Boot project
+        run: |
+          chmod +x gradlew
+          ./gradlew clean build -x test
+
+      - name: 🔐 Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: 🐳 Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: 🏗️ Build, tag, and push Docker image to ECR
+        env:
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build -t $ECR_REPOSITORY:$IMAGE_TAG .
+          docker push $ECR_REPOSITORY:$IMAGE_TAG
+
+      - name: 🚀 Update ECS Service to use new image
+        env:
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          echo "🔍 Fetching current ECS task definition..."
+          TASK_DEF_ARN=$(aws ecs describe-services \
+            --cluster $ECS_CLUSTER \
+            --services $ECS_SERVICE \
+            --query "services[0].taskDefinition" \
+            --output text)
+
+          echo "🧩 Downloading and cleaning task definition JSON..."
+          aws ecs describe-task-definition \
+            --task-definition $TASK_DEF_ARN \
+            --query "taskDefinition" > task-def.json
+
+          # ✅ 불필요한 읽기 전용 필드 제거
+          cat task-def.json | jq 'del(
+            .taskDefinitionArn,
+            .revision,
+            .status,
+            .requiresAttributes,
+            .compatibilities,
+            .registeredAt,
+            .registeredBy
+          )' > cleaned-task-def.json
+
+          echo "🪄 Updating image tag in task definition..."
+          NEW_TASK_DEF=$(jq --arg IMAGE "$ECR_REPOSITORY:$IMAGE_TAG" \
+            '.containerDefinitions[0].image = $IMAGE' cleaned-task-def.json)
+          echo "$NEW_TASK_DEF" > new-task-def.json
+
+          echo "📦 Registering new task definition..."
+          NEW_TASK_DEF_ARN=$(aws ecs register-task-definition \
+            --cli-input-json file://new-task-def.json \
+            --query "taskDefinition.taskDefinitionArn" \
+            --output text)
+
+          echo "🚀 Updating service to use new task definition..."
+          aws ecs update-service \
+            --cluster $ECS_CLUSTER \
+            --service $ECS_SERVICE \
+            --task-definition $NEW_TASK_DEF_ARN
+
+          echo "✅ Deployment triggered successfully!"
